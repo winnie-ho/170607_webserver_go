@@ -7,27 +7,27 @@ import (
 	"encoding/json"
 
     "gopkg.in/mgo.v2"
-    "gopkg.in/mgo.v2/bson"
+    // "gopkg.in/mgo.v2/bson"
 )
 
 
 //types for product config and errors
 type config struct {
-	ID bson.ObjectId `json: "id" bson:"_id"`
-	ErrorObj string `json: "errorObj" bson:"errorObj"`
-	ConfigBody string `json: "configBody" bson:"configBody"`
+	Error ErrorObj `json: "error" bson:"error"`
+	ConfigBody ConfigObj `json: "configBody" bson:"configBody"`
 }
 
-// type Error struct {
-// 	code int `json: "code"`
-// 	message string `json: "message"`
-// }
+type ErrorObj struct {
+	Code int `json: "code" bson:"code"`
+	Message string `json: "message" bson:"message"`
+}
 
-// type Config struct {
-// 	name string `json: "name"`
-// 	body string `json: "body"`
-// }
+type ConfigObj struct {
+	Name string `json: "name"`
+	Body string `json: "body"`
+}
 
+//adding the adapter interface
 type Adapter func(http.Handler) http.Handler
 
 func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
@@ -37,6 +37,7 @@ func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
   return h
 }
 
+//handles db session for handlers and store it in context. Returns and adapter.
 func withDB(db *mgo.Session) Adapter {
   // return the Adapter
   return func(h http.Handler) http.Handler {
@@ -44,8 +45,9 @@ func withDB(db *mgo.Session) Adapter {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
       // copy the database session      
       dbsession := db.Copy()
-      defer dbsession.Close() // clean up 
-      // save it in the mux context
+      defer dbsession.Close()
+
+      // save it in the mux context with a key of "database"
       context.Set(r, "database", dbsession)
       // pass execution to the original handler
       h.ServeHTTP(w, r)
@@ -65,44 +67,44 @@ func handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-  // connect to the database
-  db, err := mgo.Dial("localhost")
-  if err != nil {
-    log.Fatal("cannot dial mongo connection", err)
-  }
-  defer db.Close() //close the db connection
+	// connect to the database
+	db, err := mgo.Dial("localhost")
+	if err != nil {
+		log.Fatal("cannot dial mongo connection", err)
+	}
+	defer db.Close() //close the db connection
 
-  // Adapt our handle function using withDB
-  h := Adapt(http.HandlerFunc(handle), withDB(db))
-  // add the handler
-  http.Handle("/config", context.ClearHandler(h))
-  // start the server
+	// Adapt our handle function using withDB
+	h := Adapt(http.HandlerFunc(handle), withDB(db))
 
+	// add the handler
+	http.Handle("/config", context.ClearHandler(h))
+
+	// start the server
 	log.Println("Listening on port 8080")
-
-  if err := http.ListenAndServe(":8080", nil); err != nil {
-    log.Fatal(err)
-  }
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal(err)
+	}
 }
 
 
 func handleInsert(w http.ResponseWriter, r *http.Request) {
-  db := context.Get(r, "database").(*mgo.Session)
-  // decode the request body
-  var c config
-  if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-    http.Error(w, err.Error(), http.StatusBadRequest)
-    return
-  }
-  // give the config a unique ID and set the time
-  c.ID = bson.NewObjectId()
-  // insert it into the database
-  if err := db.DB("avProductConfig").C("configs").Insert(&c); err != nil {
-    http.Error(w, err.Error(), http.StatusBadRequest)
-    return
-  }
-  // redirect to it
-  http.Redirect(w, r, "/configs/"+c.ID.Hex(), http.StatusTemporaryRedirect)
+	db := context.Get(r, "database").(*mgo.Session)
+
+	// decode the request body
+	var c config
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// insert it into the database
+	if err := db.DB("avProductConfig").C("configs").Insert(&c); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// redirect to it
+	http.Redirect(w, r, "/configs/", http.StatusTemporaryRedirect)
 }
 
 func handleRead(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +112,7 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
   // load the configs
   var configs []*config
   if err := db.DB("avProductConfig").C("configs").
-    Find(nil).Sort("-when").Limit(100).All(&configs); err != nil {
+    Find(nil).Sort("-when").Limit(10).All(&configs); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
