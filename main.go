@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 
     "gopkg.in/mgo.v2"
-    // "gopkg.in/mgo.v2/bson"
+    "gopkg.in/mgo.v2/bson"
 )
 
 
@@ -23,8 +23,8 @@ type ErrorObj struct {
 }
 
 type ConfigObj struct {
-	Name string `json: "name"`
-	Body string `json: "body"`
+	Name string `json: "name" bson:"name"`
+	ProductId string `json: "productId" bson:"productId"`
 }
 
 //adding the adapter interface
@@ -78,7 +78,8 @@ func main() {
 	h := Adapt(http.HandlerFunc(handle), withDB(db))
 
 	// add the handler
-	http.Handle("/config", context.ClearHandler(h))
+	http.Handle("/config/", context.ClearHandler(h))
+	http.Handle("/config/:id", context.ClearHandler(h))
 
 	// start the server
 	log.Println("Listening on port 8080")
@@ -114,6 +115,30 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
   if err := db.DB("avProductConfig").C("configs").
     Find(nil).Sort("-when").Limit(10).All(&configs); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  // write it out
+  if err := json.NewEncoder(w).Encode(configs); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+}
+
+func handleReadById(w http.ResponseWriter, r *http.Request) {
+  db := context.Get(r, "database").(*mgo.Session)
+  // load the configs
+
+
+//find how to access id from params in url line
+	id := pat.Param(r, "id")
+
+
+
+  var configs []*config
+  if err := db.DB("avProductConfig").C("configs").
+		Find(bson.M{"configbody.productid": id}).One(&configs); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Failed find ProductId: ", err)
     return
   }
   // write it out
