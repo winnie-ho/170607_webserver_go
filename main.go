@@ -66,6 +66,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	handleRead(w, r)
 		case "POST":
 	handleInsert(w, r)
+		case "PUT":
+	handleUpdate(w, r)
 		default:
 	http.Error(w, "Method not supported", http.StatusMethodNotAllowed)
 	}
@@ -84,7 +86,6 @@ func main() {
 
 	// route handlers
 	http.Handle("/configs/", context.ClearHandler(h))
-	http.Handle("/other/", context.ClearHandler(h))
 
 	// start the server
 	log.Println("Listening on port 8080")
@@ -158,6 +159,46 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
   }
   // write it out
   if err := json.NewEncoder(w).Encode(configs); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+}
+
+
+func handleUpdate(w http.ResponseWriter, r *http.Request) {
+  db := context.Get(r, "database").(*mgo.Session)
+  // load the configs
+
+
+  // config := config {
+	// 	Number: 9,
+	// 	Name: "something",
+	// }
+
+
+	var configToUpdate config
+	decoder := json.NewDecoder(r.Body)
+	err:=decoder.Decode(&configToUpdate)
+		if err != nil {
+			return
+		}
+
+//access id from url line
+	id := r.URL.Path[len("/configs/"):]
+	// idConvert, _ := json.Marshal(id)
+	// id := 2
+
+	idConvert, _ := strconv.ParseInt(id, 10, 64)
+	fmt.Print(idConvert)
+
+	err = db.DB("avProductConfig").C("configs").Update(bson.M{"number": idConvert}, &configToUpdate); 
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Failed to update: ", err)
+    return
+  }
+  // write it out
+  if err := json.NewEncoder(w).Encode(configToUpdate); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
