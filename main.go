@@ -119,7 +119,7 @@ func handleInsert(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/configs/", http.StatusTemporaryRedirect)
 }
 
-// func handleRead(w http.ResponseWriter, r *http.Request) {
+// func handleReadAll(w http.ResponseWriter, r *http.Request) {
 //   db := context.Get(r, "database").(*mgo.Session)
 
 //   // load the configs
@@ -151,6 +151,9 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
 
 	idConvert, _ := strconv.ParseInt(id, 10, 64)
 
+	
+
+
 	err := db.DB("avProductConfig").C("configs").Find(bson.M{"number": idConvert}).All(&configs); 
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -167,14 +170,6 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
 
 func handleUpdate(w http.ResponseWriter, r *http.Request) {
   db := context.Get(r, "database").(*mgo.Session)
-  // load the configs
-
-
-  // config := config {
-	// 	Number: 9,
-	// 	Name: "something",
-	// }
-
 
 	var configToUpdate config
 	decoder := json.NewDecoder(r.Body)
@@ -183,7 +178,7 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-//access id from url line
+	//access id from url line, everything after
 	id := r.URL.Path[len("/configs/"):]
 	// idConvert, _ := json.Marshal(id)
 	// id := 2
@@ -194,7 +189,7 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 	err = db.DB("avProductConfig").C("configs").Update(bson.M{"number": idConvert}, &configToUpdate); 
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("Failed to update: ", err)
+		log.Println("Failed to update", err)
     return
   }
   // write it out
