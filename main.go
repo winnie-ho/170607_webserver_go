@@ -5,6 +5,8 @@ import (
 	"context"
 	"log"
 	"encoding/json"
+	"fmt"
+	"strconv"
 
     "gopkg.in/mgo.v2"
     "gopkg.in/mgo.v2/bson"
@@ -13,19 +15,22 @@ import (
 
 //types for product config and errors
 type config struct {
-	Error ErrorObj `json: "error" bson:"error"`
-	ConfigBody ConfigObj `json: "configBody" bson:"configBody"`
-}
-
-type ErrorObj struct {
-	Code int `json: "code" bson:"code"`
-	Message string `json: "message" bson:"message"`
-}
-
-type ConfigObj struct {
+	Number int `json: "number" bson:"number"`
 	Name string `json: "name" bson:"name"`
-	ProductId string `json: "productId" bson:"productId"`
+
+	// Error ErrorObj `json: "error" bson:"error"`
+	// ConfigBody ConfigObj `json: "configBody" bson:"configBody"`
 }
+
+// type ErrorObj struct {
+// 	Code int `json: "code" bson:"code"`
+// 	Message string `json: "message" bson:"message"`
+// }
+
+// type ConfigObj struct {
+// 	Name string `json: "name" bson:"name"`
+// 	ProductId string `json: "productId" bson:"productId"`
+// }
 
 //adding the adapter interface
 type Adapter func(http.Handler) http.Handler
@@ -37,7 +42,7 @@ func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
   return h
 }
 
-//handles db session for handlers and store it in context. Returns and adapter.
+//handles db session for handlers and store it in context. Returns an adapter.
 func withDB(db *mgo.Session) Adapter {
   // return the Adapter
   return func(h http.Handler) http.Handler {
@@ -77,9 +82,9 @@ func main() {
 	// Adapt our handle function using withDB
 	h := Adapt(http.HandlerFunc(handle), withDB(db))
 
-	// add the handler
-	http.Handle("/config/", context.ClearHandler(h))
-	http.Handle("/config/:id", context.ClearHandler(h))
+	// route handlers
+	http.Handle("/configs/", context.ClearHandler(h))
+	http.Handle("/other/", context.ClearHandler(h))
 
 	// start the server
 	log.Println("Listening on port 8080")
@@ -87,6 +92,9 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+
+
 
 
 func handleInsert(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +108,9 @@ func handleInsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// insert it into the database
-	if err := db.DB("avProductConfig").C("configs").Insert(&c); err != nil {
+	err := db.DB("avProductConfig").C("configs").Insert(&c); 
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -108,13 +118,42 @@ func handleInsert(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/configs/", http.StatusTemporaryRedirect)
 }
 
+// func handleRead(w http.ResponseWriter, r *http.Request) {
+//   db := context.Get(r, "database").(*mgo.Session)
+
+//   // load the configs
+//   var configs []*config
+
+// 	err := db.DB("avProductConfig").C("configs").Find(nil).Sort("-when").Limit(10).All(&configs);
+//   if err != nil {
+//     http.Error(w, err.Error(), http.StatusInternalServerError)
+//     return
+//   }
+//   // write it out
+//   if err := json.NewEncoder(w).Encode(configs); err != nil {
+//     http.Error(w, err.Error(), http.StatusInternalServerError)
+//     return
+//   }
+// }
+
 func handleRead(w http.ResponseWriter, r *http.Request) {
   db := context.Get(r, "database").(*mgo.Session)
   // load the configs
   var configs []*config
-  if err := db.DB("avProductConfig").C("configs").
-    Find(nil).Sort("-when").Limit(10).All(&configs); err != nil {
+
+
+//access id from url line
+	id := r.URL.Path[len("/configs/"):]
+	// idConvert, _ := json.Marshal(id)
+	fmt.Print(id)
+	// id := 2
+
+	idConvert, _ := strconv.ParseInt(id, 10, 64)
+
+	err := db.DB("avProductConfig").C("configs").Find(bson.M{"number": idConvert}).All(&configs); 
+  if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Failed to find Product: ", err)
     return
   }
   // write it out
@@ -122,30 +161,7 @@ func handleRead(w http.ResponseWriter, r *http.Request) {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
-}
 
-func handleReadById(w http.ResponseWriter, r *http.Request) {
-  db := context.Get(r, "database").(*mgo.Session)
-  // load the configs
-
-
-//find how to access id from params in url line
-	id := pat.Param(r, "id")
-
-
-
-  var configs []*config
-  if err := db.DB("avProductConfig").C("configs").
-		Find(bson.M{"configbody.productid": id}).One(&configs); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("Failed find ProductId: ", err)
-    return
-  }
-  // write it out
-  if err := json.NewEncoder(w).Encode(configs); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
 }
 
 
